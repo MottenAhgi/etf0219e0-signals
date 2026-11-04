@@ -1,0 +1,115 @@
+name: 0219E0 analysis
+on:
+  workflow_dispatch:
+    inputs:
+      demo:
+        description: Synthetic test only
+        type: boolean
+        default: true
+      mode:
+        type: choice
+        options: [intraday, close]
+        default: close
+  schedule:
+    - cron: '7,22,37,52 0-5 * * 1-5'
+    - cron: '7,22 6 * * 1-5'
+    - cron: '7 7 * * 1-5'
+permissions:
+  contents: read
+concurrency:
+  group: analysis
+  cancel-in-progress: false
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      ready: ${{ steps.gate.outputs.ready }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: python -m unittest discover -s tests -v
+      - uses: actions/cache/restore@v4
+        with:
+          path: state
+          key: alert-${{ github.run_id }}
+          restore-keys: alert-
+      - name: Check credentials and scheduled time
+        id: gate
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          SCHEDULE: ${{ github.event.schedule }}
+          IS_DEMO: ${{ inputs.demo }}
+          KIS_APP_KEY: ${{ secrets.KIS_APP_KEY }}
+          KIS_APP_SECRET: ${{ secrets.KIS_APP_SECRET }}
+        run: |
+          python - <<'PY'
+          import os
+          from datetime import datetime
+          from zoneinfo import ZoneInfo
+          now=datetime.now(ZoneInfo('Asia/Seoul'))
+          minute=now.hour*60+now.minute
+          scheduled=os.environ['EVENT_NAME']=='schedule'
+          closing=os.environ.get('SCHEDULE')=='7 7 * * 1-5'
+          time_ok=not scheduled or (now.weekday()<5 and ((960<=minute<=1080) if closing else (540<=minute<=930)))
+          keys=bool(os.getenv('KIS_APP_KEY') and os.getenv('KIS_APP_SECRET'))
+          ready=time_ok and (keys or os.getenv('IS_DEMO')=='true')
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f: f.write('ready='+str(ready).lower()+'\n')
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as f: f.write('Ready: '+str(ready)+'; credentials: '+str(keys)+'; scheduled time valid: '+str(time_ok))
+          PY
+      - name: Analyze without orders
+        if: steps.gate.outputs.ready == 'true'
+        env:
+          KIS_APP_KEY: ${{ secrets.KIS_APP_KEY }}
+          KIS_APP_SECRET: ${{ secrets.KIS_APP_SECRET }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          IS_DEMO: ${{ inputs.demo }}
+          MANUAL_MODE: ${{ inputs.mode }}
+          SCHEDULE: ${{ github.event.schedule }}
+        run: |
+          mode="${MANUAL_MODE:-intraday}"
+          if [ "$SCHEDULE" = '7 7 * * 1-5' ]; then mode=close; fi
+          if [ "$IS_DEMO" = true ]; then
+            python analyzer.py --demo --mode "$mode"
+          else
+            python analyzer.py --mode "$mode" --alert
+          fi
+      - uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: state
+          key: alert-${{ github.run_id }}
+      - uses: actions/upload-artifact@v4
+        if: steps.gate.outputs.ready == 'true'
+        with:
+          name: analysis-${{ github.run_id }}
+          path: results/
+          retention-days: 7
+      - name: Prepare public dashboard
+        if: steps.gate.outputs.ready == 'true'
+        run: |
+          mkdir -p public
+          cp results/index.html public/index.html
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.gate.outputs.ready == 'true'
+        with:
+          path: public
+  deploy:
+    if: needs.analyze.outputs.ready == 'true'
+    needs: analyze
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@v5
+      - id: deployment
+        uses: actions/deploy-pages@v4
