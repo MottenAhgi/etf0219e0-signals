@@ -1,0 +1,5 @@
+.env
+state/
+results/
+__pycache__/
+*.csv
