@@ -1,6 +1,6 @@
 # 검증 기록 — 2026-11-04
 
-로컬 Python 3.12에서 unittest 10개 통과. GitHub 설정은 Python 3.11로 지정했으나 클라우드 실행 전입니다.
+로컬 Python 3.12에서 unittest 10개 통과. GitHub Actions Python 3.11에서도 동일 테스트와 데모 실행이 통과했습니다.
 
 - Wilder RSI: 횡보 50, 상승 100, 하락 0 확인
 - 미래 데이터 변경이 과거 지표에 영향을 주지 않음 확인
@@ -11,6 +11,8 @@
 - 합성 데이터로 지표·백테스트·JSON·모바일 HTML 생성 성공
 - workflow YAML 파싱 성공, 생성 HTML JavaScript 문법 검사 성공
 
-미검증: KIS 실제 인증 및 0219E0 데이터 응답, 상장일부터의 실제 백테스트, 실제 텔레그램 수신, GitHub Actions 실행과 예약, GitHub Pages 게시, iPhone Safari 실기기 표시. 배포와 API 키 입력 이후 검증해야 합니다.
+완료: GitHub 저장소 생성, GitHub Pages HTTPS 게시, 공개 웹주소에서 화면 및 지표 렌더링 확인, GitHub 클라우드 테스트 성공. 예약 cron 등록 완료(실제 예약 시각 실행은 아직 관찰 전).
+
+미검증: KIS 실제 인증 및 0219E0 데이터 응답, 실제 종목 백테스트, 실제 텔레그램 수신, iPhone Safari 실기기 표시. API 키 입력 이후 검증해야 합니다.
 
 합성 데이터 수익률은 실제 ETF 수익률이 아닙니다. 월분배금 총수익 백테스트와 학습형 AI 모델은 포함하지 않습니다.
